@@ -29,7 +29,7 @@ export default function Home() {
     await reclaimClient.startSession({
       onSuccessCallback: (proof) => {
         console.log("Verification success", proof);
-        alert({ proof });
+        alert(JSON.stringify(proof));
         // Check if the user has 10 or more followers
         const followerCount = parseInt(proof.parameters.follower_count);
         if (followerCount >= 10) {
