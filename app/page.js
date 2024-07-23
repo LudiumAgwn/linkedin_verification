@@ -29,10 +29,15 @@ export default function Home() {
     await reclaimClient.startSession({
       onSuccessCallback: (proof) => {
         console.log("Verification success", proof);
-        alert(JSON.stringify(proof));
+        prompt(
+          "",
+          JSON.stringify(JSON.stringify(proof[0].claimData.parameters))
+        );
         // Check if the user has 10 or more followers
-        const followerCount = parseInt(proof.parameters.follower_count);
-        if (followerCount >= 10) {
+        const followerCount = parseInt(
+          proof[0].claimData.parameters.paramValues.followers
+        );
+        if (followerCount == 0) {
           router.push("/congrats");
         } else {
           alert(
@@ -53,17 +58,17 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-8">
+    <main className="flex flex-col items-center justify-center min-h-screen p-24">
+      <h1 className="mb-8 text-4xl font-bold">
         LinkedIn Follower Verification
       </h1>
-      <p className="text-xl mb-8">
+      <p className="mb-8 text-xl">
         You need at least 10 LinkedIn followers to access this app.
       </p>
       <button
         onClick={getVerificationReq}
         disabled={isVerifying}
-        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
       >
         {isVerifying ? "Verifying..." : "Verify LinkedIn Followers"}
       </button>
