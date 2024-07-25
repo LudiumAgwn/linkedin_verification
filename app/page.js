@@ -1,60 +1,92 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Reclaim } from "@reclaimprotocol/js-sdk";
+import QRCode from "react-qr-code";
+
+const APP_ID = "0x33E090932F66d7340d7166E603b5E7F1EC4d9915";
+const APP_SECRET =
+  "0x98d41ae62da76289b5d5b5c98f5c9b61b572b482aa088de7f6c7b260848c8dc9";
+const PROVIDER_ID = "4f041b5a-56b7-49e7-8289-e64cf5dad5a9"; // LinkedIn Equal
 
 export default function Home() {
+  const [url, setUrl] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const router = useRouter();
 
-  const getVerificationReq = async () => {
-    setIsVerifying(true);
-    const APP_ID = "0x33E090932F66d7340d7166E603b5E7F1EC4d9915";
-    const reclaimClient = new Reclaim.ProofRequest(APP_ID);
+  const reclaimClient = new Reclaim.ProofRequest(APP_ID);
 
-    const providerIds = [
-      "4f041b5a-56b7-49e7-8289-e64cf5dad5a9", // LinkedIn Equal
-    ];
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      // mobile
+      setIsMobile(true);
+    } else {
+      // desktop
+      setIsMobile(false);
+    }
+  }, []);
 
-    await reclaimClient.buildProofRequest(providerIds[0]);
+  const handleVerificationSuccess = (proof) => {
+    console.log("Verification success", proof);
+    const followerCount = parseInt(
+      JSON.parse(proof[0].claimData.parameters).paramValues.followers
+    );
+    if (followerCount == 0) {
+      router.push("/congrats");
+    } else {
+      alert(
+        "Sorry, you need at least 10 LinkedIn followers to access this app."
+      );
+    }
+    setIsVerifying(false);
+  };
+  const handleVerificationFailure = (error) => {
+    console.error("Verification failed", error);
+    alert("Verification failed. Please try again.");
+    setIsVerifying(false);
+  };
 
-    const APP_SECRET =
-      "0x98d41ae62da76289b5d5b5c98f5c9b61b572b482aa088de7f6c7b260848c8dc9";
+  const setupReclaimClient = async () => {
+    await reclaimClient.buildProofRequest(PROVIDER_ID);
     reclaimClient.setSignature(
       await reclaimClient.generateSignature(APP_SECRET)
     );
+  };
 
-    const { requestUrl } = await reclaimClient.createVerificationRequest();
-
-    await reclaimClient.startSession({
-      onSuccessCallback: (proof) => {
-        console.log("Verification success", proof);
-        prompt(
-          "",
-          JSON.stringify(JSON.stringify(proof[0].claimData.parameters))
-        );
-        // Check if the user has 10 or more followers
-        const followerCount = parseInt(
-          proof[0].claimData.parameters.paramValues.followers
-        );
-        if (followerCount == 0) {
-          router.push("/congrats");
-        } else {
-          alert(
-            "Sorry, you need at least 10 LinkedIn followers to access this app."
-          );
-        }
-        setIsVerifying(false);
-      },
-      onFailureCallback: (error) => {
-        console.error("Verification failed", error);
-        alert("Verification failed. Please try again.");
-        setIsVerifying(false);
-      },
+  const startReclaimSession = () => {
+    reclaimClient.startSession({
+      onSuccessCallback: handleVerificationSuccess,
+      onFailureCallback: handleVerificationFailure,
     });
+  };
 
-    // Open the verification URL in a new window
+  const getVerificationReq = async () => {
+    setIsVerifying(true);
+    await setupReclaimClient();
+    const { requestUrl } = await reclaimClient.createVerificationRequest();
+    startReclaimSession();
     window.open(requestUrl, "_blank");
+  };
+
+  const generateVerificationRequest = async () => {
+    reclaimClient.addContext(
+      `user's address`,
+      "for acmecorp.com on 1st january"
+    );
+    await setupReclaimClient();
+    const { requestUrl } = await reclaimClient.createVerificationRequest();
+    setUrl(requestUrl);
+    startReclaimSession();
+  };
+
+  const handleVerifyClick = () => {
+    if (isMobile) {
+      getVerificationReq();
+    } else {
+      generateVerificationRequest();
+    }
   };
 
   return (
@@ -66,12 +98,13 @@ export default function Home() {
         You need at least 10 LinkedIn followers to access this app.
       </p>
       <button
-        onClick={getVerificationReq}
+        onClick={handleVerifyClick}
         disabled={isVerifying}
         className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
       >
         {isVerifying ? "Verifying..." : "Verify LinkedIn Followers"}
       </button>
+      {url && <QRCode value={url} />}
     </main>
   );
 }
