@@ -28,11 +28,6 @@ const CongratulationsPage = () => {
         <p className="mb-8 text-xl text-white md:text-2xl">
           LinkedIn 팔로워 검증에 성공하셨습니다.
         </p>
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 20, delay: 1 }}
-        ></motion.div>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
