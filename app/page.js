@@ -33,7 +33,7 @@ export default function Home() {
     const followerCount = parseInt(
       JSON.parse(proof[0].claimData.parameters).paramValues.followers
     );
-    if (followerCount == 0) {
+    if (followerCount == 10) {
       router.push("/congrats");
     } else {
       alert(
@@ -72,8 +72,8 @@ export default function Home() {
 
   const generateVerificationRequest = async () => {
     reclaimClient.addContext(
-      `user's address`,
-      "for acmecorp.com on 1st january"
+      `user's linkedin follower count`,
+      "for Road To Global, ludium and namulabs"
     );
     await setupReclaimClient();
     const { requestUrl } = await reclaimClient.createVerificationRequest();
