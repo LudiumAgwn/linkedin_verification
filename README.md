@@ -1,63 +1,176 @@
-# Reclaim Protocol을 이용한 LinkedIn 팔로워 확인 구현 가이드
+# Reclaim Protocol을 이용한 LinkedIn 팔로워 확인 구현
 
-이 가이드는 Reclaim Protocol을 사용하여 LinkedIn 팔로워 수를 확인하는 프로세스를 구현하는 방법에 초점을 맞춥니다. Next.js와 React 관련 기본 지식은 이미 있다고 가정하고, Reclaim Protocol의 핵심 개념과 사용 방법을 설명하겠습니다.
+이 가이드에서는 Reclaim Protocol을 사용하여 사용자의 LinkedIn 팔로워 수를 확인하는 Next.js 애플리케이션을 만드는 과정을 설명합니다. 서버 측에서 실행되어야 할 부분과 클라이언트 측에서 실행되는 부분을 구분하여 설명하겠습니다.
 
-## 1. Reclaim Protocol 소개
+## 1. 프로젝트 설정
 
-Reclaim Protocol은 사용자의 개인 데이터에 대한 증명을 안전하게 생성하고 검증할 수 있게 해주는 프로토콜입니다. 이 프로토콜을 통해 사용자는 자신의 데이터를 직접 공유하지 않고도 특정 조건을 만족함을 증명할 수 있습니다.
-
-## 2. Reclaim SDK 설정
-
-먼저 Reclaim SDK를 설치합니다:
+먼저 새로운 Next.js 프로젝트를 생성합니다:
 
 ```bash
-npm install @reclaimprotocol/js-sdk
+npx create-next-app linkedin-follower-verification
+cd linkedin-follower-verification
 ```
 
-그리고 SDK를 초기화합니다:
+필요한 패키지를 설치합니다:
 
-```javascript
+```bash
+npm install @reclaimprotocol/js-sdk react-qr-code
+```
+
+## 2. Reclaim Protocol 구현
+
+`app/page.js` 파일을 다음과 같이 작성합니다:
+
+```jsx
+"use client";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Reclaim } from "@reclaimprotocol/js-sdk";
+import QRCode from "react-qr-code";
 
 const APP_ID = "YOUR_APP_ID";
+const APP_SECRET = "YOUR_APP_SECRET";
+const PROVIDER_ID = "YOUR_PROVIDER_ID"; // LinkedIn Equal
+
+export default function Home() {
+  const [url, setUrl] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const router = useRouter();
+
+  const reclaimClient = new Reclaim.ProofRequest(APP_ID);
+
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    setIsMobile(isMobile);
+  }, []);
+
+  const handleVerificationSuccess = (proof) => {
+    console.log("Verification success", proof);
+    const followerCount = parseInt(
+      JSON.parse(proof[0].claimData.parameters).paramValues.followers
+    );
+    if (followerCount == 0) {
+      router.push("/congrats");
+    } else {
+      alert(
+        "Sorry, you need at least 10 LinkedIn followers to access this app."
+      );
+    }
+    setIsVerifying(false);
+  };
+
+  const handleVerificationFailure = (error) => {
+    console.error("Verification failed", error);
+    alert("Verification failed. Please try again.");
+    setIsVerifying(false);
+  };
+
+  const setupReclaimClient = async () => {
+    await reclaimClient.buildProofRequest(PROVIDER_ID);
+    reclaimClient.setSignature(
+      await reclaimClient.generateSignature(APP_SECRET)
+    );
+  };
+
+  const startReclaimSession = () => {
+    reclaimClient.startSession({
+      onSuccessCallback: handleVerificationSuccess,
+      onFailureCallback: handleVerificationFailure,
+    });
+  };
+
+  const getVerificationReq = async () => {
+    setIsVerifying(true);
+    await setupReclaimClient();
+    const { requestUrl } = await reclaimClient.createVerificationRequest();
+    startReclaimSession();
+    window.open(requestUrl, "_blank");
+  };
+
+  const generateVerificationRequest = async () => {
+    reclaimClient.addContext(
+      `user's address`,
+      "for acmecorp.com on 1st january"
+    );
+    await setupReclaimClient();
+    const { requestUrl } = await reclaimClient.createVerificationRequest();
+    setUrl(requestUrl);
+    startReclaimSession();
+  };
+
+  const handleVerifyClick = () => {
+    if (isMobile) {
+      getVerificationReq();
+    } else {
+      generateVerificationRequest();
+    }
+  };
+
+  return (
+    <main className="flex flex-col items-center justify-center min-h-screen p-24">
+      <h1 className="mb-8 text-4xl font-bold">
+        LinkedIn Follower Verification
+      </h1>
+      <p className="mb-8 text-xl">
+        You need at least 10 LinkedIn followers to access this app.
+      </p>
+      <button
+        onClick={handleVerifyClick}
+        disabled={isVerifying}
+        className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-700"
+      >
+        {isVerifying ? "Verifying..." : "Verify LinkedIn Followers"}
+      </button>
+      {url && <QRCode value={url} />}
+    </main>
+  );
+}
+```
+
+## 3. 구현 과정 설명
+
+### Reclaim Client 초기화
+
+```javascript
 const reclaimClient = new Reclaim.ProofRequest(APP_ID);
 ```
 
-`APP_ID`는 Reclaim 대시보드에서 얻을 수 있습니다. 이 ID는 당신의 애플리케이션을 식별하는 데 사용됩니다.
+Reclaim Protocol과 상호작용하기 위한 클라이언트를 초기화합니다. `APP_ID`는 아래 주소에서 'New Application' 버튼을 클릭하여 얻을 수 있습니다.
+https://dev.reclaimprotocol.org/applications
 
-## 3. 증명 요청 생성
+어플리케이션 생성 과정에서 프로바이더를 추가 할 수 있습니다. 이때 'LinkedIn Equal'를 선택하여 추가해줍니다.
 
-LinkedIn 팔로워 수 확인을 위한 증명 요청을 생성합니다:
+### 클라이언트 설정
 
 ```javascript
-const PROVIDER_ID = "YOUR_PROVIDER_ID"; // LinkedIn Equal Provider ID
-
 const setupReclaimClient = async () => {
   await reclaimClient.buildProofRequest(PROVIDER_ID);
   reclaimClient.setSignature(await reclaimClient.generateSignature(APP_SECRET));
 };
 ```
 
-`PROVIDER_ID`는 LinkedIn 팔로워 수를 확인할 수 있는 특정 데이터 제공자를 식별합니다. `buildProofRequest` 메소드는 이 제공자에 대한 증명 요청을 구성합니다.
+이 부분은 보안상 서버 측에서 실행되어야 합니다. `APP_SECRET`은 절대 클라이언트에 노출되어서는 안 됩니다.
+그러나 이 예시에서는 편의를 위해 클라이언트에서 실행됩니다.
 
-`setSignature` 메소드는 요청에 서명을 추가하여 요청의 진실성을 보장합니다. `APP_SECRET`은 애플리케이션의 비밀 키로, 절대 공개되어서는 안 됩니다.
-
-## 4. 컨텍스트 추가
-
-요청에 컨텍스트를 추가하여 증명의 목적과 범위를 명확히 할 수 있습니다:
+### 증명 요청 생성
 
 ```javascript
-reclaimClient.addContext(
-  `user's linkedin follower count`,
-  "for Road To Global, ludium and namulabs"
-);
+const generateVerificationRequest = async () => {
+  reclaimClient.addContext(
+    `user's linkedin follower count`,
+    "for Road To Global, ludium and namulabs"
+  );
+  await setupReclaimClient();
+  const { requestUrl } = await reclaimClient.createVerificationRequest();
+  setUrl(requestUrl);
+  startReclaimSession();
+};
 ```
 
-이 컨텍스트는 증명 요청의 목적을 명시하며, 사용자에게 표시될 수 있습니다.
+이 함수는 증명 요청을 생성하고 QR 코드에 사용될 URL을 설정합니다.
 
-## 5. 증명 세션 시작
-
-증명 세션을 시작하고 결과를 처리하는 콜백을 설정합니다:
+### 세션 시작
 
 ```javascript
 const startReclaimSession = () => {
@@ -68,11 +181,9 @@ const startReclaimSession = () => {
 };
 ```
 
-`startSession` 메소드는 증명 프로세스를 시작합니다. 성공 및 실패 콜백을 제공하여 결과를 처리할 수 있습니다.
+Reclaim 세션을 시작하고 성공/실패 콜백을 설정합니다.
 
-## 6. 증명 결과 처리
-
-증명 성공 시 결과를 처리합니다:
+### 결과 처리
 
 ```javascript
 const handleVerificationSuccess = (proof) => {
@@ -80,40 +191,23 @@ const handleVerificationSuccess = (proof) => {
   const followerCount = parseInt(
     JSON.parse(proof[0].claimData.parameters).paramValues.followers
   );
-  if (followerCount >= 10) {
-    // 접근 허용
-  } else {
-    // 접근 거부
-  }
+  // ... 결과에 따른 처리
 };
 ```
 
-`proof` 객체에는 LinkedIn 팔로워 수에 대한 검증된 정보가 포함되어 있습니다. 이 정보를 파싱하여 필요한 조건(예: 10명 이상의 팔로워)을 만족하는지 확인할 수 있습니다.
+증명 결과를 처리하고 필요한 액션을 수행합니다.
 
-## 7. 모바일과 데스크톱 환경 대응
+## 4. 주의사항
 
-Reclaim Protocol은 모바일과 데스크톱 환경에서 다르게 동작합니다:
+1. `APP_SECRET`은 반드시 서버 측에서 관리해야 합니다. 이 예제에서는 학습을 위해 클라이언트 측에 포함되어 있지만, 실제 구현에서는 절대 이렇게 하면 안 됩니다.
 
-```javascript
-const handleVerifyClick = () => {
-  if (isMobile) {
-    getVerificationReq();
-  } else {
-    generateVerificationRequest();
-  }
-};
+2. 증명 요청 생성과 서명 과정(`setupReclaimClient`)도 이상적으로는 서버 측에서 처리해야 합니다.
 
-const getVerificationReq = async () => {
-  await setupReclaimClient();
-  const { requestUrl } = await reclaimClient.createVerificationRequest();
-  window.open(requestUrl, "_blank");
-};
+3. 실제 구현에서는 증명 결과의 유효성을 서버 측에서 한 번 더 검증하는 것이 좋습니다.
 
-const generateVerificationRequest = async () => {
-  await setupReclaimClient();
-  const { requestUrl } = await reclaimClient.createVerificationRequest();
-  setUrl(requestUrl); // QR 코드 생성을 위해 URL 저장
-};
-```
+## 5. 실행 및 테스트
 
-모바일에서는 직접 새 창에서 인증 프로세스를 열고, 데스크톱에서는 QR 코드를 생성하여 모바일 기기로 스캔할 수 있게 합니다.
+1. `APP_ID`, `APP_SECRET`, `PROVIDER_ID`를 실제 값으로 교체합니다.
+2. `npm run dev`로 애플리케이션을 실행합니다.
+3. 브라우저에서 `http://localhost:3000`에 접속합니다.
+4. "Verify LinkedIn Followers" 버튼을 클릭하고 프로세스를 따릅니다.
