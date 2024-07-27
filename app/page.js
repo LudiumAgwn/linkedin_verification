@@ -33,7 +33,7 @@ export default function Home() {
     const followerCount = parseInt(
       JSON.parse(proof[0].claimData.parameters).paramValues.followers
     );
-    if (followerCount == 10) {
+    if (followerCount >= 10) {
       router.push("/congrats");
     } else {
       alert(
