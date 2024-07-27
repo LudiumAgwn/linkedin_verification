@@ -30,7 +30,7 @@ import QRCode from "react-qr-code";
 
 const APP_ID = "YOUR_APP_ID";
 const APP_SECRET = "YOUR_APP_SECRET";
-const PROVIDER_ID = "YOUR_PROVIDER_ID"; // LinkedIn Equal
+const PROVIDER_ID = "4f041b5a-56b7-49e7-8289-e64cf5dad5a0"; // LinkedIn Equal ABD
 
 export default function Home() {
   const [url, setUrl] = useState("");
